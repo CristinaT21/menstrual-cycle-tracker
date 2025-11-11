@@ -1,5 +1,3 @@
-version: '3.8'
-
 # Menstrual Cycle Tracking App - Microservices Architecture
 # Demonstrates: Service Orchestration, Database-per-Service, API Gateway, Message Queue
 
