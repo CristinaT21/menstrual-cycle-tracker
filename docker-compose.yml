@@ -1,0 +1,259 @@
+version: '3.8'
+
+# Menstrual Cycle Tracking App - Microservices Architecture
+# Demonstrates: Service Orchestration, Database-per-Service, API Gateway, Message Queue
+
+services:
+  # ============================================
+  # DATABASE SERVICES (Database-per-Service Pattern)
+  # ============================================
+
+  user-db:
+    image: postgres:15-alpine
+    container_name: user-db
+    environment:
+      POSTGRES_DB: userdb
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+    volumes:
+      - user-db-data:/var/lib/postgresql/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d userdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  cycle-db:
+    image: postgres:15-alpine
+    container_name: cycle-db
+    environment:
+      POSTGRES_DB: cycledb
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+    volumes:
+      - cycle-db-data:/var/lib/postgresql/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d cycledb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  analytics-db:
+    image: postgres:15-alpine
+    container_name: analytics-db
+    environment:
+      POSTGRES_DB: analyticsdb
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+    volumes:
+      - analytics-db-data:/var/lib/postgresql/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d analyticsdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  notification-db:
+    image: postgres:15-alpine
+    container_name: notification-db
+    environment:
+      POSTGRES_DB: notificationdb
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+    volumes:
+      - notification-db-data:/var/lib/postgresql/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d notificationdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================
+  # MESSAGE QUEUE (Asynchronous Communication)
+  # ============================================
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"    # AMQP port
+      - "15672:15672"  # Management UI
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================
+  # MICROSERVICES
+  # ============================================
+
+  user-service:
+    build:
+      context: ./services/user-service
+      dockerfile: Dockerfile
+    container_name: user-service
+    environment:
+      DATABASE_URL: postgresql://user:password@user-db:5432/userdb
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-your-secret-key-change-in-production}
+      DEBUG: ${DEBUG:-False}
+    ports:
+      - "5001:5001"
+    depends_on:
+      user-db:
+        condition: service_healthy
+    networks:
+      - backend
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5001/api/users/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  cycle-tracking-service:
+    build:
+      context: ./services/cycle-tracking-service
+      dockerfile: Dockerfile
+    container_name: cycle-tracking-service
+    environment:
+      DATABASE_URL: postgresql://user:password@cycle-db:5432/cycledb
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-your-secret-key-change-in-production}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: guest
+      RABBITMQ_PASSWORD: guest
+      DEBUG: ${DEBUG:-False}
+    ports:
+      - "5002:5002"
+    depends_on:
+      cycle-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - backend
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5002/api/cycles/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  analytics-service:
+    build:
+      context: ./services/analytics-service
+      dockerfile: Dockerfile
+    container_name: analytics-service
+    environment:
+      DATABASE_URL: postgresql://user:password@analytics-db:5432/analyticsdb
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-your-secret-key-change-in-production}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: guest
+      RABBITMQ_PASSWORD: guest
+      DEBUG: ${DEBUG:-False}
+    ports:
+      - "5003:5003"
+    depends_on:
+      analytics-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - backend
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5003/api/analytics/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  notification-service:
+    build:
+      context: ./services/notification-service
+      dockerfile: Dockerfile
+    container_name: notification-service
+    environment:
+      DATABASE_URL: postgresql://user:password@notification-db:5432/notificationdb
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-your-secret-key-change-in-production}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: guest
+      RABBITMQ_PASSWORD: guest
+      DEBUG: ${DEBUG:-False}
+    ports:
+      - "5004:5004"
+    depends_on:
+      notification-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - backend
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5004/api/notifications/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ============================================
+  # API GATEWAY (Single Entry Point Pattern)
+  # ============================================
+
+  nginx:
+    image: nginx:alpine
+    container_name: nginx-gateway
+    ports:
+      - "80:80"
+    volumes:
+      - ./gateway/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - user-service
+      - cycle-tracking-service
+      - analytics-service
+      - notification-service
+    networks:
+      - backend
+    restart: unless-stopped
+
+# ============================================
+# NETWORKS
+# ============================================
+
+networks:
+  backend:
+    driver: bridge
+    name: menstrual-cycle-tracker-network
+
+# ============================================
+# VOLUMES (Data Persistence)
+# ============================================
+
+volumes:
+  user-db-data:
+    name: user-db-data
+  cycle-db-data:
+    name: cycle-db-data
+  analytics-db-data:
+    name: analytics-db-data
+  notification-db-data:
+    name: notification-db-data
+  rabbitmq-data:
+    name: rabbitmq-data
