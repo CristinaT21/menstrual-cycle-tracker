@@ -602,28 +602,6 @@ Content-Type: application/json
 
 ---
 
-## Production Considerations
-
-This is a **research prototype**. For production deployment, add:
-
-- [ ] Service mesh (Istio, Linkerd)
-- [ ] Centralized logging (ELK stack)
-- [ ] Distributed tracing (Jaeger, Zipkin)
-- [ ] Monitoring and alerting (Prometheus, Grafana)
-- [ ] API rate limiting
-- [ ] Circuit breakers and retry logic
-- [ ] Database migrations (Alembic)
-- [ ] Automated testing (pytest, integration tests)
-- [ ] CI/CD pipeline (GitHub Actions, GitLab CI)
-- [ ] SSL/TLS encryption
-- [ ] Secrets management (Vault, AWS Secrets Manager)
-- [ ] Load testing and performance optimization
-- [ ] Database backups and disaster recovery
-- [ ] API versioning strategy
-- [ ] Documentation (OpenAPI/Swagger)
-
----
-
 ## License
 
 This project is created for academic research purposes.
@@ -632,7 +610,8 @@ This project is created for academic research purposes.
 
 ## Author
 
-Created for Master's thesis research on comparing Modular Monolith vs Microservices architectures.
+Created for Master's research on comparing Modular Monolith vs Microservices architectures.
 
 **Date:** 2025
+
 **Purpose:** Academic Research
